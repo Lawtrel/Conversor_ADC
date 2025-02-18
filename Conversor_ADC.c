@@ -14,7 +14,7 @@
 #define RED_PIN 13
 #define Joy_X 26
 #define Joy_Y 27
-#define Joy 22
+#define JOYSTIC 22
 #define BTN_A 5
 #define I2C_SDA 14
 #define I2C_SCL 15
@@ -23,9 +23,22 @@ ssd1306_t display;
 uint8_t ssd[ssd1306_buffer_length];
 struct render_area frame_area = {
     0, ssd1306_width - 1, 0, ssd1306_n_pages - 1};
+bool led_green_state = false;
 
 void init_display();
 void update_display(int x, int y);
+void button_callback(uint gpio, uint32_t events) {
+    static uint32_t last_time = 0;
+    uint32_t now = to_ms_since_boot(get_absolute_time());
+    if (now - last_time <200) return;
+    last_time = now;
+
+    if (gpio == JOYSTIC)
+    {
+        led_green_state = !led_green_state;
+        gpio_put(GREEN_PIN, led_green_state);
+    }
+}
 
 void setup() {
     //inicializar adc para ler os valores de x e y
@@ -35,24 +48,22 @@ void setup() {
     adc_gpio_init(Joy_Y);
     gpio_set_function(RED_PIN, GPIO_FUNC_PWM);
     gpio_set_function(BLUE_PIN, GPIO_FUNC_PWM);
-    gpio_set_function(GREEN_PIN, GPIO_FUNC_PWM);
+    gpio_init(GREEN_PIN);
+    gpio_set_dir(GREEN_PIN, GPIO_OUT);
 
     uint slices_red = pwm_gpio_to_slice_num(RED_PIN);
     uint slices_blue = pwm_gpio_to_slice_num(BLUE_PIN);
-    uint slices_green = pwm_gpio_to_slice_num(GREEN_PIN);
-
     //Configurar PWM para Controle de Brilho
     pwm_set_wrap(slices_red, 4095);
     pwm_set_wrap(slices_blue, 4095);
-    pwm_set_wrap(slices_green, 4095);
     pwm_set_enabled(slices_red, true);
     pwm_set_enabled(slices_blue, true);
-    pwm_set_enabled(slices_green, true);
-
     //Configurar Btn com pull-up
-    gpio_init(Joy);
-    gpio_set_dir(Joy, GPIO_IN);
-    gpio_pull_up(Joy);
+    gpio_init(JOYSTIC);
+    gpio_set_dir(JOYSTIC, GPIO_IN);
+    gpio_set_irq_enabled_with_callback(JOYSTIC, GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true, &button_callback);
+    gpio_pull_up(JOYSTIC);
+
     gpio_init(BTN_A);
     gpio_set_dir(BTN_A, GPIO_IN);
     gpio_pull_up(BTN_A);
