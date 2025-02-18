@@ -24,9 +24,13 @@ uint8_t ssd[ssd1306_buffer_length];
 struct render_area frame_area = {
     0, ssd1306_width - 1, 0, ssd1306_n_pages - 1};
 bool led_green_state = false;
+bool pwm_enabled = true;
+int border_style= 0;
 
 void init_display();
 void update_display(int x, int y);
+void draw_border();
+
 void button_callback(uint gpio, uint32_t events) {
     static uint32_t last_time = 0;
     uint32_t now = to_ms_since_boot(get_absolute_time());
@@ -37,6 +41,19 @@ void button_callback(uint gpio, uint32_t events) {
     {
         led_green_state = !led_green_state;
         gpio_put(GREEN_PIN, led_green_state);
+
+        //altera a borda do display
+        border_style = (border_style + 1) % 3;
+        draw_border();
+    } else if (gpio == BTN_A) {
+        pwm_enabled = !pwm_enabled;
+        pwm_set_enabled(pwm_gpio_to_slice_num(RED_PIN), pwm_enabled);
+        pwm_set_enabled(pwm_gpio_to_slice_num(BLUE_PIN), pwm_enabled);
+
+        if (!pwm_enabled) {
+            pwm_set_gpio_level(RED_PIN, 0);
+            pwm_set_gpio_level(BLUE_PIN, 0);
+        }
     }
 }
 
@@ -61,15 +78,17 @@ void setup() {
     //Configurar Btn com pull-up
     gpio_init(JOYSTIC);
     gpio_set_dir(JOYSTIC, GPIO_IN);
-    gpio_set_irq_enabled_with_callback(JOYSTIC, GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true, &button_callback);
     gpio_pull_up(JOYSTIC);
+    gpio_set_irq_enabled_with_callback(JOYSTIC, GPIO_IRQ_EDGE_FALL, true, &button_callback);
+
 
     gpio_init(BTN_A);
     gpio_set_dir(BTN_A, GPIO_IN);
     gpio_pull_up(BTN_A);
-
+    gpio_set_irq_enabled_with_callback(BTN_A, GPIO_IRQ_EDGE_FALL, true, &button_callback);
     //inicializa o display
     init_display();
+    draw_border();
 }
 int main() {
     setup();
@@ -83,9 +102,10 @@ int main() {
         x = (adc_y * 120) / 4095;
         y = (adc_x * 56) / 4095;
 
-        pwm_set_gpio_level(RED_PIN, adc_x);
-        pwm_set_gpio_level(BLUE_PIN, adc_y);
-        
+        if (pwm_enabled) {
+            pwm_set_gpio_level(RED_PIN, adc_x);
+            pwm_set_gpio_level(BLUE_PIN, adc_y);
+        }
         update_display(x, y);
         sleep_ms(100);
     }
@@ -107,10 +127,26 @@ void init_display() {
 
 void update_display(int x, int y) {
     memset(ssd, 0, ssd1306_buffer_length);
+    draw_border();
     for (int i = 0; i < 8; i++) {
         for (int j = 0; j < 8; j++) {
             ssd1306_set_pixel(ssd, x + i, y + j, true);
         }
     }
     render_on_display(ssd, &frame_area);
+}
+
+void draw_border() {
+    for (int i = 0; i < ssd1306_width; i++) {
+        if (border_style == 0 || (i % 4 == 0 && border_style == 1)) {
+            ssd1306_set_pixel(ssd, i, 0 , true);
+            ssd1306_set_pixel(ssd, i, ssd1306_height - 1 , true);
+        }
+    }
+    for (int i = 0; i < ssd1306_height; i++) {
+        if (border_style == 0 || (i % 4 == 0 && border_style == 1)) {
+            ssd1306_set_pixel(ssd, 0, i, true);
+            ssd1306_set_pixel(ssd, ssd1306_width - 1, i , true);
+        }
+    }
 }
