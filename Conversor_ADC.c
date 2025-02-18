@@ -1,4 +1,7 @@
 #include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <ctype.h>
 #include "pico/stdlib.h"
 #include "hardware/adc.h"
 #include "hardware/pwm.h"
@@ -15,7 +18,88 @@
 #define BTN_A 5
 #define I2C_SDA 14
 #define I2C_SCL 15
-int main() {
-    stdio_init_all();
 
+ssd1306_t display;
+uint8_t ssd[ssd1306_buffer_length];
+struct render_area frame_area = {
+    0, ssd1306_width - 1, 0, ssd1306_n_pages - 1};
+
+void init_display();
+void update_display(int x, int y);
+
+void setup() {
+    //inicializar adc para ler os valores de x e y
+    stdio_init_all();
+    adc_init();
+    adc_gpio_init(Joy_X);
+    adc_gpio_init(Joy_Y);
+    gpio_set_function(RED_PIN, GPIO_FUNC_PWM);
+    gpio_set_function(BLUE_PIN, GPIO_FUNC_PWM);
+    gpio_set_function(GREEN_PIN, GPIO_FUNC_PWM);
+
+    uint slices_red = pwm_gpio_to_slice_num(RED_PIN);
+    uint slices_blue = pwm_gpio_to_slice_num(BLUE_PIN);
+    uint slices_green = pwm_gpio_to_slice_num(GREEN_PIN);
+
+    //Configurar PWM para Controle de Brilho
+    pwm_set_wrap(slices_red, 4095);
+    pwm_set_wrap(slices_blue, 4095);
+    pwm_set_wrap(slices_green, 4095);
+    pwm_set_enabled(slices_red, true);
+    pwm_set_enabled(slices_blue, true);
+    pwm_set_enabled(slices_green, true);
+
+    //Configurar Btn com pull-up
+    gpio_init(Joy);
+    gpio_set_dir(Joy, GPIO_IN);
+    gpio_pull_up(Joy);
+    gpio_init(BTN_A);
+    gpio_set_dir(BTN_A, GPIO_IN);
+    gpio_pull_up(BTN_A);
+
+    //inicializa o display
+    init_display();
+}
+int main() {
+    setup();
+    int x, y;
+    while (1) {
+        adc_select_input(0);
+        int adc_x = adc_read();
+        adc_select_input(1);
+        int adc_y = adc_read();
+
+        x = (adc_y * 120) / 4095;
+        y = (adc_x * 56) / 4095;
+
+        pwm_set_gpio_level(RED_PIN, adc_x);
+        pwm_set_gpio_level(BLUE_PIN, adc_y);
+        
+        update_display(x, y);
+        sleep_ms(100);
+    }
+    
+}
+
+void init_display() {
+    i2c_init(i2c1, 400 * 1000);
+    gpio_set_function(I2C_SDA, GPIO_FUNC_I2C);
+    gpio_set_function(I2C_SCL, GPIO_FUNC_I2C);
+    gpio_pull_up(I2C_SDA);
+    gpio_pull_up(I2C_SCL);
+
+    ssd1306_init();
+    calculate_render_area_buffer_length(&frame_area);
+    memset(ssd, 0, ssd1306_buffer_length);
+    render_on_display(ssd, &frame_area);
+}
+
+void update_display(int x, int y) {
+    memset(ssd, 0, ssd1306_buffer_length);
+    for (int i = 0; i < 8; i++) {
+        for (int j = 0; j < 8; j++) {
+            ssd1306_set_pixel(ssd, x + i, y + j, true);
+        }
+    }
+    render_on_display(ssd, &frame_area);
 }

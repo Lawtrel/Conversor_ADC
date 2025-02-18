@@ -41,6 +41,7 @@
         "ssd1306.h": "c",
         "stdio.h": "c",
         "i2c.h": "c",
-        "clocks.h": "c"
+        "clocks.h": "c",
+        "string.h": "c"
     }
 }
