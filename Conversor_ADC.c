@@ -75,6 +75,9 @@ void setup() {
     pwm_set_wrap(slices_blue, 4095);
     pwm_set_enabled(slices_red, true);
     pwm_set_enabled(slices_blue, true);
+
+    pwm_set_gpio_level(RED_PIN, 0);
+    pwm_set_gpio_level(BLUE_PIN, 0);
     //Configurar Btn com pull-up
     gpio_init(JOYSTIC);
     gpio_set_dir(JOYSTIC, GPIO_IN);
@@ -103,8 +106,11 @@ int main() {
         y = (adc_x * 56) / 4095;
 
         if (pwm_enabled) {
-            pwm_set_gpio_level(RED_PIN, adc_x);
-            pwm_set_gpio_level(BLUE_PIN, adc_y);
+            if (adc_x != 2048) pwm_set_gpio_level(RED_PIN, adc_x);
+            else pwm_set_gpio_level(RED_PIN, 0);
+
+            if (adc_y != 2048) pwm_set_gpio_level(BLUE_PIN, adc_y);
+            else pwm_set_gpio_level(BLUE_PIN, 0);
         }
         update_display(x, y);
         sleep_ms(100);
